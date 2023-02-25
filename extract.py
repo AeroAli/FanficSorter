@@ -1,6 +1,7 @@
 import csv
 from bs4 import BeautifulSoup
 
+
 def get_ff():
     # print("get_ff")
     html_doc = "../html/bookmarks.html"
@@ -51,7 +52,7 @@ def create_csv(fics):
         print(keys)
         dict_writer.writerows(fics[1:])
 
-    stripNewLines(f"../csv/blanks/{fics[0]}.csv",f"../csv/{fics[0]}.csv")
+    stripNewLines(f"../csv/blanks/{fics[0]}.csv", f"../csv/{fics[0]}.csv")
 
 
 def stripNewLines(input_file, output_file):
@@ -60,6 +61,7 @@ def stripNewLines(input_file, output_file):
         for line in inFile:
             if line.strip():
                 outFile.write(line)
+
 
 def sort_sites(fic_list):
     ao3_fics = ["ao3"]
@@ -78,9 +80,11 @@ def sort_sites(fic_list):
                 other.append(fic["site"])
     return ao3_fics, ffn_fics, other_fics
 
+
 def main():
     links = sort_sites(get_fics(get_ff()))
     [create_csv(link) for link in links if len(link) > 1]
+
 
 if __name__ == '__main__':
     main()
