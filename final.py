@@ -1,6 +1,7 @@
 import asyncio
 import csv
 import json
+import os
 import time
 from datetime import datetime
 
@@ -68,6 +69,8 @@ async def get_meta(soup, meta_dict):
 
 
 async def scrape(url, meta_dict, err_dict, url_num, reses):
+    meta_dict[url] = {}
+    meta = meta_dict[url]
     async with aiohttp.ClientSession() as session:
         if "arc" in url and "/works/" in url:
             try:
@@ -75,49 +78,55 @@ async def scrape(url, meta_dict, err_dict, url_num, reses):
                 await asyncio.sleep(0.42069)
                 async with session.get(url) as resp:
                     res = resp.status
-
                     err_dict[str(url_num)]["res"] = str(res)
                     err_dict[str(url_num)]["resp"] = str(resp)
-                    print(res, resp, url)
-                    # reses = []
                     if res not in reses:
                         reses.append(res)
+                    if "login?restricted=true" not in str(resp):
+                        if "429" in str(res):
+                            print(f"sleeping for {int(resp.headers['retry-after'])} seconds")
+                            await asyncio.sleep(int(resp.headers["retry-after"]))
+                            await scrape(url, meta_dict, err_dict, url_num, reses)
 
-                    if "429" in str(res):
-                        print(f"sleeping for {int(resp.headers['retry-after'])} seconds")
-                        await asyncio.sleep(int(resp.headers["retry-after"]))
-                        await scrape(url, meta_dict, err_dict, url_num, reses)
-
-                    if "200" in str(res):
-                        try:
-                            html_text = await resp.text()
-                            soup = BeautifulSoup(html_text, 'html.parser')
-                            print("soup acquired")  # , url)
-                            await get_meta(soup, meta_dict)
-                        except Exception as e:
-                            await asyncio.sleep(0.5)
-                            now = datetime.now()
-                            current_time = now.strftime("%H:%M:%S")
-                            print("time: ", current_time, "res: ", res, "url: ", url, "err: ", e)
+                        if "200" in str(res):
                             try:
-                                x = 10
-                                print(f"sleeping for {x} seconds")
-                                await asyncio.sleep(x)
                                 html_text = await resp.text()
                                 soup = BeautifulSoup(html_text, 'html.parser')
-                                print("soup acquired", url)
-                                await get_meta(soup, meta_dict)
+                                print("soup acquired")  # , url)
+                                await get_meta(soup, meta)
+                            except Exception as e:
+                                await asyncio.sleep(0.5)
+                                now = datetime.now()
+                                current_time = now.strftime("%H:%M:%S")
+                                print("url num: ", url_num, "time: ", current_time, "url: ", url, "err: ", e)
+                                try:
+                                    x = 10
+                                    print(f"sleeping for {x} seconds")
+                                    await asyncio.sleep(x)
+                                    html_text = await resp.text()
+                                    soup = BeautifulSoup(html_text, 'html.parser')
+                                    print("soup acquired", url)
+                                    await get_meta(soup, meta)
 
-                                err_dict[str(url_num)]["e"] = str(e)
-                            except Exception as uh:
-                                print("time: ", current_time, "res: ", res, "url: ", url, "err: ", uh)
-                                err_dict[str(url_num)]["uh"] = str(uh)
-                                print(err_dict)
+                                    err_dict[str(url_num)]["e"] = str(e)
+                                except Exception as uh:
+                                    print("url num: ", url_num, "time: ", current_time, "url: ", url, "err: ", uh)
+                                    err_dict[str(url_num)]["uh"] = str(uh)
+                                    # print(err_dict)
+                                    if str(uh) == "'NoneType' object has no attribute 'findChild'" and "?view_adult=true" not in str(url):
+                                        if "#" not in str(url) and "?" not in str(url):
+                                            url = str(url)+"?view_adult=true"
+                                        elif "#" not in str(url) and "?" in str(url):
+                                            url = str(url).split("?")[0]+"?view_adult=true&"
+                                        await scrape(url, meta_dict, err_dict, url_num, reses)
 
+                    else:
+                        meta["Private"] = "yes"
+                        err_dict["Private"] = "yes"
             except Exception as err:
                 # print(err, url)
                 err_dict[str(url_num)]['err'] = str(err)
-                print(err_dict)
+                # print(err_dict)
                 try:
                     x = 10
                     print(f"sleeping for {x} seconds")
@@ -128,55 +137,122 @@ async def scrape(url, meta_dict, err_dict, url_num, reses):
                     err_dict[str(url_num)]["err"] = str(err)
                     err_dict[str(url_num)]["er"] = str(er)
 
-                    print(err_dict)
+
+async def get_files():
+    files = {
+        "ao3": [],
+        "fandoms": []
+    }
+    try:
+        current = os.getcwd()
+        up = os.path.abspath(os.path.join(current, os.pardir))
+        # print(current)
+        # print(up)
+        mypath = os.path.join(up, "csv\\fandoms")
+        for (dirpath, dirnames, filenames) in os.walk(mypath):
+            fandom = str(dirpath).split("fandoms\\")[-1]
+            # print(fandom)
+            files["fandoms"].append(fandom)
+            for file in filenames:
+                # print(os.path.join(dirpath, file))
+                if "ao3" in file:
+                    files["ao3"].append(os.path.join(dirpath, file))
+        # print(ao3)
+    except OSError as Er:
+        print(Er)
+    return files
+
+
+async def folders(folder):
+    try:
+        folder = f"json\\fandoms\\{folder}"
+        current = os.getcwd()
+        up = os.path.abspath(os.path.join(current, os.pardir))
+        try:
+            path = os.path.join(up, folder)
+            os.makedirs(path)
+        except OSError as Err:
+            print(Err, "err")
+    except OSError as Er:
+        print(Er)
 
 
 async def main():
     start_time = time.time()
-
-    fandom_extract.main()
-
+    now = datetime.now()
+    current_time = now.strftime("%H:%M:%S")
+    with open("time.txt", "a") as t:
+        t.write(f"\n{now}, ")
+    print(now)
     tasks = []
-    file = '../csv/ao3.csv'
-    # file = '../csv/test/ao3.csv'
-    with open(file, encoding="utf-8") as file:
-        csv_reader = csv.DictReader(file)
-        url_num = 0
-        meta_list = []
-        err_list = []
-        res_list = []
-        url_dict = {}
-        for csv_row in csv_reader:
-            url_dict[url_num] = str(csv_row['link'])
-            print(url_num)
-            meta_dict = {}
-            err_dict = {str(url_num): {}}
+    print("getting fics")
+    fandom_extract.main()
+    timings = {
+        "start unix time": start_time,
+        "start time": current_time
+    }
+    stuff = {
+        "meta_list": [],
+        "err_list": [],
+        "res_list": [],
+        "url_dict": {}
+    }
 
-            if url_num % 1000 == 0:
-                await asyncio.sleep(5)
-                task = asyncio.create_task(scrape(csv_row['link'], meta_dict, err_dict, url_num, res_list))
-                tasks.append(task)
-            else:
+    url_num = 0
+    files = await get_files()
+
+    for item in files["fandoms"]:
+        await folders(item)  # TODO: write meta to separate files
+
+    for item in files["ao3"]:
+        j = item.split("csv")
+        outfile = j[0] + "json" + j[1].split("ao3")[0] + "meta.json"
+        # print(j[1].split("ao3")[0].split("\\")[-2])
+        meta = []
+        with open(item, encoding="utf-8") as fic_file:
+            csv_reader = csv.DictReader(fic_file)
+
+            for csv_row in csv_reader:
+                stuff["url_dict"][url_num] = str(csv_row['link'])
+                print(url_num)
                 meta_dict = {}
-                task = asyncio.create_task(scrape(csv_row['link'], meta_dict, err_dict, url_num, res_list))
+                err_dict = {str(url_num): {}}
+
+                task = asyncio.create_task(scrape(csv_row['link'], meta_dict, err_dict, url_num, stuff["res_list"]))
                 tasks.append(task)
-            err_dict[str(url_num)]["url"] = csv_row["link"]
-            meta_list.append({csv_row["link"]: meta_dict})
-            err_list.append(err_dict)
-            url_num += + 1
+                err_dict[str(url_num)]["url"] = csv_row["link"]
+                stuff["meta_list"].append({str(url_num): meta_dict})
+                stuff["err_list"].append(err_dict)
+                meta.append({str(url_num): meta_dict})
+                url_num += + 1
+        with open(outfile, "w") as f:
+            json.dump(meta, f, indent=4)
 
     print('Saving the output of extracted information')
     await asyncio.gather(*tasks)
 
-    with open("final.json", "w", encoding="utf-8") as f:
-        json.dump(meta_list, f, indent=4)
-    with open("error_dict.json", "w", encoding="utf-8") as j:
-        json.dump(err_list, j, indent=4)
-    with open("res.json", "w", encoding="utf-8") as j:
-        json.dump(res_list, j, indent=4)
+    with open("stuff.json", "w", encoding="utf-8") as f:
+        json.dump(stuff, f, indent=4)
 
-    time_difference = time.time() - start_time
+    with open("final.json", "w", encoding="utf-8") as f:
+        json.dump(stuff["meta_list"], f, indent=4)
+    with open("error_dict.json", "w", encoding="utf-8") as j:
+        json.dump(stuff["err_list"], j, indent=4)
+    with open("res.json", "w", encoding="utf-8") as j:
+        json.dump(stuff["res_list"], j, indent=4)
+
+    end_time = time.time()
+    now = datetime.now()
+    current_time = now.strftime("%H:%M:%S")
+    time_difference = end_time - start_time
     print(f'Scraping time: {time_difference} seconds.')
 
+    timings["end unix time"] = end_time
+    timings["end time"] = current_time
+    timings["length"] = time_difference
+    with open("time.txt", "a") as t:
+        t.write(f"{now}, {time_difference}")
+    with open("time.json", "w", encoding="utf-8") as j:
+        json.dump(timings, j, indent=4)
 
 asyncio.run(main())

@@ -1,13 +1,12 @@
 import csv
 import json
+import os
 
 from bs4 import BeautifulSoup
 
 
 def get_ff():
-    # print("get_ff")
     html_doc = "../html/bookmarks.html"
-    # html_doc = "../html/test.html"
     new_html = ""
     writing = False
     with open(html_doc, "r", encoding="utf-8") as og:
@@ -47,22 +46,28 @@ def get_fics_dict(html_doc):
     fandoms = []
 
     # Get all the tags for the fics.
-    links = base_ff_folder.find_all_next("a")
-    # print(links)
-    for link in links:
-
-        get_parent(link, fandoms)
+    fics = base_ff_folder.find_all_next("a")
+    # print(fics)
+    for fic in fics:
+        get_parent(fic, fandoms)
         try:
             w = len(fandoms) + 1
             try:
                 x = len(fandoms) - 1
                 # print(fandoms[x])
+                link = str(fic.get("href"))
+                # print(link)
+                link = str(link.split("#")[0])
+                # print(link)
+                if "comment" in link:
+                    link = str(link.split("show_comments=true&")[0])+str(link.split("show_comments=true&")[1])
+                # print(link)
                 if fandoms[x] in results:
-                    results[fandoms[x]].append({"title": link.text, "link": link.get("href"), "fandom": str(fandoms[x]),
-                                                "site": str(link.get("href")).split("/")[2]})
+                    results[fandoms[x]].append({"title": fic.text, "link": link, "fandom": str(fandoms[x]),
+                                                "site": str(link).split("/")[2]})
                 else:
-                    results[fandoms[x]] = [{"title": link.text, "link": link.get("href"), "fandom": str(fandoms[x]),
-                                            "site": str(link.get("href")).split("/")[2]}]
+                    results[fandoms[x]] = [{"title": fic.text, "link": link, "fandom": str(fandoms[x]),
+                                            "site": str(link).split("/")[2]}]
             except Exception as e:
                 print(e)
         except Exception as E:
@@ -74,22 +79,64 @@ def get_fics_dict(html_doc):
     return results
 
 
-
 def create_csv_dict(fics):
-    # TODO: convert to using dict
+    for key, value in fics.items():
+        folder = key.replace("/", "_&_")
+        folder = folder.replace(" ", "_")
+        folder = folder.replace(":", "_")
 
-    folder = fics.keys()
-    keys = fics[1].keys()
+        if "&" in folder and "0Meta_&_Fandom" not in folder:
+            folder = f"Crossovers/{folder}"
 
-    with open(f"../csv/blanks/{fics[0]}1.csv", "w", encoding="utf-8") as output_file:
-        dict_writer = csv.DictWriter(output_file, keys)
-        dict_writer.writeheader()
-        print(fics[0])
-        print(keys)
-        dict_writer.writerows(fics[1:])
+        metas = {
+            "Marvel": ["agents_of_shield", "avengers", "black_panther", "black_widow", "captain_america",
+                       "captain_marvel",
+                       "daredevil", "deadpool", "doctor_strange", "hawkeye", "irondad", "loki", "shield", "spiderman",
+                       "team_red", "thor", "winter_soldier", "xmen"],
+            "DC": ["arrow", "batman", "flash", "green_lantern", "smallvile"],
+            "NCIS": ["ncis_la"],
+            "CSI": ["csi__la"],
+            "Tolkien": ["lord_of_the_rings", "hobbit"],
+            "Harry_Potter": ["crack"]
+        }
 
-    stripNewLines(f"../csv/blanks/{fics[0]}1.csv", f"../csv/{fics[0]}1.csv")
+        # print(folder)
 
+        for key1, value1 in metas.items():
+            for value2 in value1:
+                if value2 in folder.lower() and "&" not in folder.lower():
+                    folder = f"{key1}/{folder}"
+                    # print(folder)
+
+        folder1 = folder
+
+        folder = f"csv/fandoms/{folder}"
+        folder1 = f"csv/blanks/fandoms/{folder1}"
+
+        if "&" in folder or "&" in folder1:
+            print(folder)
+            print(folder1)
+
+        try:
+            current = os.getcwd()
+            up = os.path.abspath(os.path.join(current, os.pardir))
+            path = os.path.join(up, folder)
+            os.makedirs(path)
+            path = os.path.join(up, folder1)
+            os.makedirs(path)
+        except OSError as Er:
+            print(Er)
+
+        for key1, value1 in value.items():
+            keys = value1[0].keys()
+            # print(keys)
+
+            with open(f"../{folder1}/{key1}.csv", "w", encoding="utf-8") as output_file:
+                dict_writer = csv.DictWriter(output_file, keys)
+                dict_writer.writeheader()
+                dict_writer.writerows(value1)
+
+            stripNewLines(f"../{folder1}/{key1}.csv", f"../{folder}/{key1}.csv")
 
 def stripNewLines(input_file, output_file):
     with open(input_file, 'r', encoding='utf-8') as inFile, \
@@ -97,24 +144,6 @@ def stripNewLines(input_file, output_file):
         for line in inFile:
             if line.strip():
                 outFile.write(line)
-
-
-def sort_sites_list(fic_list):
-    ao3_fics = ["ao3"]
-    ffn_fics = ["ffn"]
-    other_fics = ["other"]
-    other = ["not fics"]
-
-    for fic in fic_list:
-        if "arc" in fic["link"].lower() and "works" in fic["link"].lower():
-            ao3_fics.append(fic)
-        elif "fan" in fic["link"].lower() and "/s/" in fic["link"].lower():
-            ffn_fics.append(fic)
-        else:
-            other_fics.append(fic)
-            if fic["link"] not in other:
-                other.append(fic["link"])
-    return ao3_fics, ffn_fics, other_fics
 
 
 def sort_sites_dict(fics):
@@ -131,6 +160,7 @@ def sort_sites_dict(fics):
         }
         for fic in fandom:
             # print(fic)
+            print(fic.keys())
             if "arc" in fic["site"].lower():
                 if "/works/" in fic["link"].lower():
                     categories["ao3"].append(fic)
@@ -163,7 +193,8 @@ def sort_sites_dict(fics):
 def main():
     # print(json.dumps(get_fics_dict(get_ff()), indent=4))
     links = sort_sites_dict(get_fics_dict(get_ff()))
-    with open("fic_disct.json", "w") as j:
+    create_csv_dict(links)
+    with open("fic_dict.json", "w") as j:
         json.dump(links, j, indent=4)
 
 
