@@ -1,4 +1,6 @@
 import asyncio
+import aiofiles
+import aiocsv
 import csv
 import json
 import os
@@ -19,6 +21,8 @@ async def get_meta(soup, meta_dict):
     dl = div.findChild("dl", {"class": "work meta group"})
     meta = dl.findChild("dl")
 
+    summary = div.findChild("div", {"class": "summary module"}).findChild("p").text
+
     # author info
     h3 = div.findChild("h3", {"class": "byline heading"})
     link = h3.findChild("a")
@@ -27,9 +31,12 @@ async def get_meta(soup, meta_dict):
 
     h2 = div.findChild("h2", {"class": "title heading"})  # fic title
 
+
     meta_dict["title"] = h2.text.strip()
     meta_dict["Author"] = link.text
     meta_dict["Author Link"] = link.get("href")
+    meta_dict["Summary"] = summary
+
 
     class_list = []
     for child in meta.findChildren():
@@ -42,8 +49,8 @@ async def get_meta(soup, meta_dict):
                     meta_dict[f"{child['class'][0]}"] = child.text
                     # print(child["class"][0], "\t", child.text)
         except Exception as err:
-            print(child)
-            print(err)
+            # print(child)
+            # print(err)
             meta_dict[f"bookmarks"] = child.text
             continue
 
@@ -65,7 +72,7 @@ async def get_meta(soup, meta_dict):
                 meta_dict[f"{tag['class'][0]}"] = tag.text.strip()
 
     # print(meta_dict)
-    print("meta acquired")
+    # print("meta acquired")
 
 
 async def scrape(url, meta_dict, err_dict, url_num, reses):
@@ -84,7 +91,7 @@ async def scrape(url, meta_dict, err_dict, url_num, reses):
                         reses.append(res)
                     if "login?restricted=true" not in str(resp):
                         if "429" in str(res):
-                            print(f"sleeping for {int(resp.headers['retry-after'])} seconds")
+                            print(f"url num: {url_num} is sleeping for {int(resp.headers['retry-after'])} seconds")
                             await asyncio.sleep(int(resp.headers["retry-after"]))
                             await scrape(url, meta_dict, err_dict, url_num, reses)
 
@@ -92,7 +99,7 @@ async def scrape(url, meta_dict, err_dict, url_num, reses):
                             try:
                                 html_text = await resp.text()
                                 soup = BeautifulSoup(html_text, 'html.parser')
-                                print("soup acquired")  # , url)
+                                # print("soup acquired")  # , url)
                                 await get_meta(soup, meta)
                             except Exception as e:
                                 await asyncio.sleep(0.5)
@@ -105,7 +112,7 @@ async def scrape(url, meta_dict, err_dict, url_num, reses):
                                     await asyncio.sleep(x)
                                     html_text = await resp.text()
                                     soup = BeautifulSoup(html_text, 'html.parser')
-                                    print("soup acquired", url)
+                                    # print("soup acquired", url)
                                     await get_meta(soup, meta)
 
                                     err_dict[str(url_num)]["e"] = str(e)
@@ -177,12 +184,35 @@ async def folders(folder):
         print(Er)
 
 
+async def private():
+    files = await get_files()
+    priv = []
+    for file in files["ao3"]:
+        with aiofiles.open(file, "r", encoding="utf-8") as f, open("keep/old/2/final.json", "r") as j:
+            myreader = csv.DictReader(f)
+            d = json.load(j)
+            for row in myreader:
+                l = 0
+                for i in d:
+                    for v in i.values():
+                        for k1, v2 in v.items():
+                            for k in v2.keys():
+                                if "Private" in k:
+                                    l += 1
+                                    if row["link"] == k1:
+                                        print(row["title"])
+                                        priv.append(row)
+    print(l)
+    return priv
+
+
 async def main():
     start_time = time.time()
     now = datetime.now()
     current_time = now.strftime("%H:%M:%S")
-    with open("time.txt", "a") as t:
-        t.write(f"\n{now}, ")
+
+    async with aiofiles.open("time.txt", "a") as t:
+        await t.write(f"\n{now}, ")
     print(now)
     tasks = []
     print("getting fics")
@@ -201,45 +231,64 @@ async def main():
     url_num = 0
     files = await get_files()
 
-    for item in files["fandoms"]:
-        await folders(item)  # TODO: write meta to separate files
+    # for item in files["fandoms"]:
+    #     await folders(item)  # TODO: write meta to separate files
 
     for item in files["ao3"]:
         j = item.split("csv")
         outfile = j[0] + "json" + j[1].split("ao3")[0] + "meta.json"
-        # print(j[1].split("ao3")[0].split("\\")[-2])
-        meta = []
-        with open(item, encoding="utf-8") as fic_file:
-            csv_reader = csv.DictReader(fic_file)
 
-            for csv_row in csv_reader:
-                stuff["url_dict"][url_num] = str(csv_row['link'])
+        fandom = j[1].split("ao3")[0].split("\\")[-2]
+        meta = []
+        # print('open is assigned to %r' % open)
+        async with aiofiles.open(item, encoding="utf-8") as fic_file:
+            csv_reader = aiocsv.AsyncDictReader(fic_file)
+            async for csv_row in csv_reader:
+                if "\\" in fandom:
+                    metafandom = fandom.split("\\")[0]
+                    fandom = fandom.split("\\")[1]
+                    fandoms = {metafandom: fandom}
+                else:
+                    fandoms = {fandom: ""}
+
+                stuff["url_dict"][url_num] = [fandom, str(csv_row['link'])]
                 print(url_num)
                 meta_dict = {}
                 err_dict = {str(url_num): {}}
 
-                task = asyncio.create_task(scrape(csv_row['link'], meta_dict, err_dict, url_num, stuff["res_list"]))
+                task = asyncio.create_task(
+                    scrape(csv_row['link'], meta_dict, err_dict, url_num, stuff["res_list"])
+                )
+
                 tasks.append(task)
+
                 err_dict[str(url_num)]["url"] = csv_row["link"]
-                stuff["meta_list"].append({str(url_num): meta_dict})
+                stuff["meta_list"].append({str(url_num): [{"fandoms": fandoms}, meta_dict]})
                 stuff["err_list"].append(err_dict)
                 meta.append({str(url_num): meta_dict})
+
                 url_num += + 1
-        with open(outfile, "w") as f:
-            json.dump(meta, f, indent=4)
+
+        async with aiofiles.open(outfile, "w") as f:
+            j = json.dumps(meta, indent=4)
+            await f.write(j)
 
     print('Saving the output of extracted information')
     await asyncio.gather(*tasks)
 
-    with open("stuff.json", "w", encoding="utf-8") as f:
-        json.dump(stuff, f, indent=4)
+    async with aiofiles.open("stuff.json", "w", encoding="utf-8") as f:
+        j = json.dumps(stuff, indent=4)
+        await f.write(j)
 
-    with open("final.json", "w", encoding="utf-8") as f:
-        json.dump(stuff["meta_list"], f, indent=4)
-    with open("error_dict.json", "w", encoding="utf-8") as j:
-        json.dump(stuff["err_list"], j, indent=4)
-    with open("res.json", "w", encoding="utf-8") as j:
-        json.dump(stuff["res_list"], j, indent=4)
+    async with aiofiles.open("final.json", "w", encoding="utf-8")  as f:
+        j = json.dumps(stuff["meta_list"], indent=4)
+        await f.write(j)
+    async with aiofiles.open("error_dict.json", "w", encoding="utf-8") as f:
+        j = json.dumps(stuff["err_list"], indent=4)
+        await f.write(j)
+    async with aiofiles.open("res.json", "w", encoding="utf-8") as f:
+        j = json.dumps(stuff["res_list"], indent=4)
+        await f.write(j)
 
     end_time = time.time()
     now = datetime.now()
@@ -250,9 +299,10 @@ async def main():
     timings["end unix time"] = end_time
     timings["end time"] = current_time
     timings["length"] = time_difference
-    with open("time.txt", "a") as t:
-        t.write(f"{now}, {time_difference}")
-    with open("time.json", "w", encoding="utf-8") as j:
-        json.dump(timings, j, indent=4)
+    async with aiofiles.open("time.txt", "a") as t:
+        await t.write(f"{now}, {time_difference}")
+    async with aiofiles.open("time.json", "w", encoding="utf-8") as f:
+        j = json.dumps(timings, indent=4)
+        await f.write(j)
 
 asyncio.run(main())

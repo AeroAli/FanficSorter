@@ -231,12 +231,12 @@ async def main():
     start_time = time.time()
     now = datetime.now()
     current_time = now.strftime("%H:%M:%S")
-    with open("time.txt", "a") as t:
-        t.write(f"\n{now}, ")
+    # with open("time.txt", "a") as t:
+    #     t.write(f"\n{now}, ")
     print(now)
     tasks = []
     print("getting fics")
-    fandom_extract.main()
+    # fandom_extract.main()
     timings = {
         "start unix time": start_time,
         "start time": current_time
@@ -275,9 +275,14 @@ async def main():
                 )
 
                 tasks.append(task)
-
+                if "\\" in fandom:
+                    metafandom = fandom.split("\\")[0]
+                    fandom = fandom.split("\\")[1]
+                else:
+                    metafandom = ""
+                fandoms = {metafandom: fandom}
                 err_dict[str(url_num)]["url"] = csv_row["link"]
-                stuff["meta_list"].append({str(url_num): [fandom, meta_dict]})
+                stuff["meta_list"].append({str(url_num): [{"fandoms":fandoms}, meta_dict]})
                 stuff["err_list"].append(err_dict)
                 meta.append({str(url_num): meta_dict})
 
@@ -306,53 +311,53 @@ async def main():
     time_difference = end_time - start_time
     print(f'Scraping time: {time_difference} seconds.')
 
-    timings["end unix time"] = end_time
-    timings["end time"] = current_time
-    timings["length"] = time_difference
-    with open("time.txt", "a") as t:
-        t.write(f"{now}, {time_difference}")
-    with open("time.json", "w", encoding="utf-8") as j:
-        json.dump(timings, j, indent=4)
+    # timings["end unix time"] = end_time
+    # timings["end time"] = current_time
+    # timings["length"] = time_difference
+    # with open("time.txt", "a") as t:
+    #     t.write(f"{now}, {time_difference}")
+    # with open("time.json", "w", encoding="utf-8") as j:
+    #     json.dump(timings, j, indent=4)
 
 
 async def get_structure():
-    # with open("final.json", "r") as j:
-    #     meta_from_file = json.load(j)
-    #     fandoms = {}
-    #     i = 0
-    #     for value in meta_from_file:
-    #         # if i == 0:
-    #         #     print(json.dumps(value, indent=4))
-    #         # i += 1
-    #         for key1, value1 in value.items():
-    #             print(key1+":")
-    #             for value2 in value1:
-    #                 if type(value2) is str:
-    #                     print(f"\t Fandom: {value2}")
-    #                     value2_s = str(value2)
-    #                     if value2_s not in fandoms.keys():
-    #                         fandoms[value2_s] = [value]
-    #                     if value2_s in fandoms.keys():
-    #                         if value not in fandoms[value2_s]:
-    #                             fandoms[value2_s].append(value)
-    #                 # elif type(value2) is dict:
-    #                 #     for key3, value3 in value2.items():
-    #                 #         print("\t",key3)
-    #                 #         for key4, value4 in value3.items():
-    #                 #             print("\t\t", key4+":")
-    #                 #             if type(value4) is str:
-    #                 #                 print("\t\t\t", value4)
-    #                 #             elif type(value4) is list:
-    #                 #                 for value5 in value4:
-    #                 #                     if type(value5) is str:
-    #                 #                         print("\t\t\t", value5)
-    #                 #                     elif type(value5) is list:
-    #                 #                         for value6 in value5:
-    #                 #                             print("\t\t\t\t", value6)
-    #                 # else:
-    #                 #     print(type(value2))
-    #         with open("ich_weiss_nict.json", "w") as j:
-    #             json.dump(fandoms, j, indent=4)
+    with open("final.json", "r") as j:
+        meta_from_file = json.load(j)
+        fandoms = {}
+        i = 0
+        for value in meta_from_file:
+            # if i == 0:
+            #     print(json.dumps(value, indent=4))
+            # i += 1
+            for key1, value1 in value.items():
+                print(key1+":")
+                for value2 in value1:
+                    if type(value2) is str:
+                        print(f"\t Fandom: {value2}")
+                        value2_s = str(value2)
+                        if value2_s not in fandoms.keys():
+                            fandoms[value2_s] = [value]
+                        if value2_s in fandoms.keys():
+                            if value not in fandoms[value2_s]:
+                                fandoms[value2_s].append(value)
+                    # elif type(value2) is dict:
+                    #     for key3, value3 in value2.items():
+                    #         print("\t",key3)
+                    #         for key4, value4 in value3.items():
+                    #             print("\t\t", key4+":")
+                    #             if type(value4) is str:
+                    #                 print("\t\t\t", value4)
+                    #             elif type(value4) is list:
+                    #                 for value5 in value4:
+                    #                     if type(value5) is str:
+                    #                         print("\t\t\t", value5)
+                    #                     elif type(value5) is list:
+                    #                         for value6 in value5:
+                    #                             print("\t\t\t\t", value6)
+                    # else:
+                    #     print(type(value2))
+            # with open("ich_weiss_nict.json", "w") as j:
+            #     json.dump(fandoms, j, indent=4)
     # for key, value in fandoms.items():
     #     print(key)
     #     for value1 in value:
@@ -360,21 +365,28 @@ async def get_structure():
     #             print(json.dumps(key1, indent=4))
     with open("ich_weiss_nict.json", "r") as j:
         fandoms = json.load(j)
-        for value in fandoms.values():
+        for key, value in fandoms.items():
+            k = {}
+            print(key)
             for item in value:
-                for key2, value2 in item.items():
-                    # print(type(value2))
-                    print(len(value2))
-                    k = {}
+                for value2 in item.values():
                     for item1 in value2:
                         if type(item1) is str:
+                            # print(item1)
                             value2.remove(item1)
-                        elif type(item1) is dict:
-                            k.update(item1)
-                    print(len(k))
-                    # print(len(value2))
-                    item[key2] = k
+                        else:
+                            continue
+                k.update(item)
+            # print(json.dumps(k, indent=4))
+            fandoms[key] = k
+            if "\\" in key:
+                y = key.split("\\")
+                print(y[0])
+                print(y[1])
+                # fandoms[y[0]]
         # print(json.dumps(fandoms, indent=4))
+        with open("help_me.json", "w") as f:
+            json.dump(fandoms, f, indent=4)
 
-# asyncio.run(main())
-asyncio.run(get_structure())
+asyncio.run(main())
+# asyncio.run(get_structure())
