@@ -1,6 +1,5 @@
 import time
 import json
-import math
 from datetime import datetime
 
 import requests
@@ -227,7 +226,8 @@ def test():
 
     meta_list = []
 
-    links = []  # TODO: add fics here
+    links = ["https://archiveofourown.org/works/6870118", "https://archiveofourown.org/works/1042274",
+             "https://archiveofourown.org/works/1042278"]
     for i in links:
         fic_meta = {}
         try:
